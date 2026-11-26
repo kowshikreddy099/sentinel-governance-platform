@@ -28,11 +28,11 @@ def evaluate_policy(db: Session, event: TraceEventIn) -> PolicyDecision:
     policies = db.scalars(select(Policy).where(Policy.enabled.is_(True))).all()
     blocked_policy = next((policy for policy in policies if policy.id == "POL-004" and event.tool == "Customer Warehouse"), None)
     if blocked_policy:
-        return PolicyDecision(action="block", policy_id=blocked_policy.id, reasons=["Agent lacks Sensitive-Data scope for Customer Warehouse", "The request occurs in a delegated trajectory"], risk_delta=55)
+        return PolicyDecision(action="block", policy_id=blocked_policy.id, reasons=["Agent lacks Sensitive-Data scope for Customer Warehouse", "The request occurs in a delegated trajectory"], risk_delta=37)
     if event.kind == "delegation" and event.attributes.get("delegation_depth", 0) > 2:
         return PolicyDecision(action="flag", policy_id="POL-012", reasons=["Delegation depth exceeds the approved limit"], risk_delta=20)
     if event.attributes.get("behavioral_anomaly"):
-        return PolicyDecision(action="flag", policy_id="POL-019", reasons=["Tool sequence diverged from the actor's behavioral baseline"], risk_delta=12)
+        return PolicyDecision(action="flag", policy_id="POL-019", reasons=["Tool sequence diverged from the actor's behavioral baseline"], risk_delta=10)
     return PolicyDecision(action="allow", reasons=["No enabled policy blocks this action"], risk_delta=max(event.risk_delta or 0, 0))
 
 
@@ -65,7 +65,13 @@ def append_event(db: Session, run: AgentRun, payload: TraceEventIn, decision: Op
     )
     db.add(item)
     db.flush()
-    run.events.append(item)
+    # Keep an already-loaded relationship current without duplicating the first event.
+    if item not in run.events:
+        run.events.append(item)
+    if decision.policy_id:
+        matched_policy = db.get(Policy, decision.policy_id)
+        if matched_policy:
+            matched_policy.matched += 1
     recompute_run(db, run)
     return item
 
@@ -105,27 +111,7 @@ def seed_if_empty(db: Session) -> None:
 
 
 def create_research_scenario(db: Session, alert: bool = True) -> AgentRun:
-    started_at = now() - timedelta(minutes=13)
-    run = AgentRun(id=f"trc-research-{uuid4().hex[:6]}", title="Q4 competitor intelligence brief", root_agent="Research Lead", status="active", started_at=started_at, duration="10m 12s", risk_score=0, risk_label="low", decisions=0, tools=0, delegations=0, violations=0, anomaly="none")
-    db.add(run)
-    db.flush()
-    timeline = [
-        TraceEventIn(timestamp=started_at, kind="decision", actor="Research Lead", title="Research task initiated", detail="Summarize competitor positioning for the Q4 strategy brief.", risk_delta=2),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=1), kind="delegation", actor="Research Lead", title="Delegated collection task", detail="Assigned public-source collection to Data Scout with the market-research scope.", risk_delta=4, attributes={"delegation_depth": 1}),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=2), kind="tool_call", status="allowed", actor="Data Scout", title="Searched public web", detail="Query: enterprise AI governance software pricing.", tool="Web Search", risk_delta=1),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=4), kind="tool_call", status="allowed", actor="Data Scout", title="Read approved market report", detail="Opened Gartner excerpt in the approved research corpus.", tool="Knowledge Base", risk_delta=2),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=6), kind="decision", actor="Data Scout", title="Changed retrieval plan", detail="Tool sequence diverged from its learned baseline after incomplete public sources.", attributes={"behavioral_anomaly": True}),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=7), kind="tool_call", actor="Data Scout", title="Restricted data access denied", detail="Attempted to query the internal customer export. Access token lacks the required data-classification claim.", tool="Customer Warehouse"),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=7, seconds=5), kind="policy", status="blocked", actor="Sentinel Policy Engine", title="Sensitive dataset policy triggered", detail="POL-004 blocked the request and opened an escalation because this was a delegated path.", policy_id="POL-004", risk_delta=18),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=8), kind="risk", status="flagged", actor="Sentinel Risk Engine", title="Cumulative risk raised to 74", detail="Risk compounds delegation depth, attempted sensitive access, and anomalous tool ordering."),
-        TraceEventIn(timestamp=started_at + timedelta(minutes=10), kind="completion", actor="Research Lead", title="Awaiting reviewer direction", detail="The parent agent received a redacted status and cannot continue the restricted branch."),
-    ]
-    for item in timeline:
-        append_event(db, run, item)
-    run.risk_score = 74
-    run.risk_label = "high"
-    run.status = "blocked"
-    run.anomaly = "high"
-    if alert:
-        db.add(Alert(id=f"alt-{uuid4().hex[:8]}", severity="high", title="Restricted information access blocked", message="Data Scout attempted to access Customer Warehouse through a delegated research task.", trace_id=run.id, created_at=now(), state="open"))
-    return run
+    """Execute the demonstration as a real LangGraph state machine."""
+    from .governance_graph import run_research_delegation_graph
+
+    return run_research_delegation_graph(db, alert=alert)

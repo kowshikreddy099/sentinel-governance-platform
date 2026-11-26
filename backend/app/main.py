@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session, selectinload
 from .config import get_settings
 from .database import Base, engine, get_db
 from .models import AgentRun, Alert, Policy
-from .schemas import AlertOut, AlertUpdate, DashboardOut, IngestEventRequest, IngestEventResponse, PolicyOut, PolicyUpdate, TraceOut
+from .integrations import a2a_event, explain_with_llm, mcp_event
+from .schemas import A2ATaskIn, AlertOut, AlertUpdate, DashboardOut, IngestEventRequest, IngestEventResponse, LLMDecisionRequest, LLMDecisionResponse, MCPToolCallIn, PolicyOut, PolicyUpdate, TraceOut
 from .services import append_event, create_research_scenario, evaluate_policy, relative_time, seed_if_empty, trace_to_schema
+from .telemetry import configure_telemetry, governance_span
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_telemetry()
     Base.metadata.create_all(bind=engine)
     from .database import SessionLocal
     with SessionLocal() as db:
@@ -67,13 +70,46 @@ def get_trace(trace_id: str, db: Session = Depends(get_db)):
 @app.post("/v1/traces/events", response_model=IngestEventResponse, status_code=status.HTTP_201_CREATED)
 def ingest_event(payload: IngestEventRequest, db: Session = Depends(get_db)):
     run = loaded_run(db, payload.trace_id)
-    decision = evaluate_policy(db, payload.event)
-    event = append_event(db, run, payload.event, decision)
+    with governance_span("sentinel.event.ingest", {"sentinel.trace_id": payload.trace_id, "agent.name": payload.event.actor, "event.kind": payload.event.kind}):
+        decision = evaluate_policy(db, payload.event)
+        event = append_event(db, run, payload.event, decision)
     if decision.action == "block":
         db.add(Alert(id=f"alt-{event.id}", severity="high", title="Restricted action blocked", message=f"{payload.event.actor}: {payload.event.title}", trace_id=run.id, created_at=event.timestamp, state="open"))
     db.commit()
     db.refresh(run)
     return IngestEventResponse(event=trace_to_schema(run).events[-1], decision=decision, trace=trace_to_schema(run))
+
+
+@app.post("/v1/integrations/mcp/tool-calls", response_model=IngestEventResponse, status_code=status.HTTP_201_CREATED)
+def ingest_mcp_tool_call(payload: MCPToolCallIn, db: Session = Depends(get_db)):
+    """MCP gateway callback: normalize a tool call and run the same policy engine."""
+    run = loaded_run(db, payload.trace_id)
+    event_payload = mcp_event(payload)
+    decision = evaluate_policy(db, event_payload)
+    event = append_event(db, run, event_payload, decision)
+    if decision.action == "block":
+        db.add(Alert(id=f"alt-{event.id}", severity="high", title="Restricted MCP tool action blocked", message=f"{payload.agent} attempted {payload.server}/{payload.tool}.", trace_id=run.id, created_at=event.timestamp, state="open"))
+    db.commit()
+    db.refresh(run)
+    return IngestEventResponse(event=trace_to_schema(run).events[-1], decision=decision, trace=trace_to_schema(run))
+
+
+@app.post("/v1/integrations/a2a/tasks", response_model=IngestEventResponse, status_code=status.HTTP_201_CREATED)
+def ingest_a2a_task(payload: A2ATaskIn, db: Session = Depends(get_db)):
+    """A2A handoff callback, retaining delegation depth and trace correlation."""
+    run = loaded_run(db, payload.trace_id)
+    event_payload = a2a_event(payload)
+    decision = evaluate_policy(db, event_payload)
+    event = append_event(db, run, event_payload, decision)
+    db.commit()
+    db.refresh(run)
+    return IngestEventResponse(event=trace_to_schema(run).events[-1], decision=decision, trace=trace_to_schema(run))
+
+
+@app.post("/v1/llm/policy-explanations", response_model=LLMDecisionResponse)
+def policy_explanation(payload: LLMDecisionRequest):
+    """Optional LLM explanation; deterministic fallback keeps local installs runnable."""
+    return explain_with_llm(payload)
 
 
 @app.post("/v1/scenarios/research-delegation/run", response_model=TraceOut, status_code=status.HTTP_201_CREATED)

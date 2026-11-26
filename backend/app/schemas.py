@@ -104,3 +104,35 @@ class IngestEventResponse(BaseModel):
     event: TraceEventOut
     decision: PolicyDecision
     trace: TraceOut
+
+
+class MCPToolCallIn(BaseModel):
+    trace_id: str
+    agent: str
+    server: str
+    tool: str
+    arguments: dict = Field(default_factory=dict)
+    timestamp: datetime
+    span_id: Optional[str] = None
+
+
+class A2ATaskIn(BaseModel):
+    trace_id: str
+    from_agent: str
+    to_agent: str
+    task: str
+    delegation_depth: int = 1
+    timestamp: datetime
+    traceparent: Optional[str] = None
+
+
+class LLMDecisionRequest(BaseModel):
+    policy_id: str
+    action: Literal["allow", "flag", "block"]
+    evidence: dict = Field(default_factory=dict)
+
+
+class LLMDecisionResponse(BaseModel):
+    explanation: str
+    provider: str
+    model: Optional[str] = None

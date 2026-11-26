@@ -10,7 +10,10 @@ The included demo tells the requested story end-to-end: **Research Lead** delega
 - Interactive demo execution, trace search, evidence JSON export, alert acknowledgement, and policy controls.
 - Clear allowed/flagged/blocked states, delegation topology, cumulative risk, and behavioral anomaly context.
 - FastAPI + SQLAlchemy service that works with SQLite locally and PostgreSQL in deployment.
-- Event ingestion endpoint designed for LangGraph, MCP, A2A, and OpenTelemetry adapters.
+- A real LangGraph research-delegation workflow: plan → A2A handoff → MCP tool calls → anomaly check → policy block → redacted completion.
+- OpenTelemetry spans with optional OTLP export, plus normalized MCP and A2A ingestion endpoints.
+- Optional OpenAI-backed policy explanations through LangChain; local installs use a deterministic safe fallback when no API key is configured.
+- Plotly cumulative-risk analytics in the React console.
 - Seeded policies and the realistic research-delegation scenario.
 
 ## Start the dashboard
@@ -49,6 +52,12 @@ VITE_GOV_API_URL=http://localhost:8000/v1
 ```
 
 Restart Vite after changing the environment file.
+
+## Runtime integrations
+
+The backend is the governance system of record. It persists traces and policies in PostgreSQL, executes the demo path with LangGraph, emits OpenTelemetry spans, and exposes integration endpoints for MCP and A2A runtimes. Copy `backend/.env.example` to `backend/.env` to configure an optional `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OTEL_EXPORTER_OTLP_ENDPOINT`.
+
+The GitHub Pages URL is an intentionally static, shareable product preview. Deploy the FastAPI service separately, then set `VITE_GOV_API_URL` in the frontend deployment to make the dashboard use live backend data.
 
 ## PostgreSQL deployment
 

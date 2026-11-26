@@ -25,6 +25,9 @@ agent / LangGraph callback / MCP gateway
 | `GET` | `/v1/traces/{trace_id}` | A complete trace/evidence record |
 | `POST` | `/v1/traces/events` | Ingest and evaluate an agent action |
 | `POST` | `/v1/scenarios/research-delegation/run` | Run the seeded end-to-end demo scenario |
+| `POST` | `/v1/integrations/mcp/tool-calls` | Normalize an MCP server tool call, enforce policy, and persist it |
+| `POST` | `/v1/integrations/a2a/tasks` | Record an A2A delegation with depth and trace correlation |
+| `POST` | `/v1/llm/policy-explanations` | Produce a policy explanation through configured LLM API or safe fallback |
 | `PATCH` | `/v1/alerts/{alert_id}` | Set `open`, `acknowledged`, or `resolved` |
 | `GET` | `/v1/policies` | List active governance policies |
 
@@ -52,4 +55,6 @@ The default policy engine blocks `Customer Warehouse`, adds risk, changes the tr
 
 ## Runtime adapters
 
-Instrument LangGraph node entry/exit, MCP client tool calls, and A2A task handoffs as `TraceEventIn` records. Set the same `trace_id` through the chain. The event `attributes` JSON field is intentionally extensible for OpenTelemetry IDs, model metadata, scopes, tokens, classifier scores, and redaction references.
+The demonstration endpoint runs a LangGraph `StateGraph`: Research Lead plans, delegates to Data Scout via an A2A event, the worker calls approved MCP tools, its retrieval plan trips the behavioral policy, and the restricted MCP tool is blocked. `governance_span` emits OpenTelemetry spans for ingestion and graph events; configure `OTEL_EXPORTER_OTLP_ENDPOINT` to export them to a collector.
+
+Instrument LangGraph node entry/exit, MCP client tool calls, and A2A task handoffs with the same `trace_id`. The `attributes` JSON field is intentionally extensible for OpenTelemetry IDs, model metadata, scopes, tokens, classifier scores, and redaction references.

@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react-plotly.js": "^2.6.4",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "plotly.js-dist-min": "^4.3.0",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "react-plotly.js": "^4.1.0",
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
     "@types/react": "latest",

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { governanceApi } from './api'
+import { RiskTrajectoryChart } from './RiskTrajectoryChart'
 import type { Alert, DashboardData, EventStatus, GovernanceTrace, Severity, TraceEvent } from './types'
 
 type Nav = 'Overview' | 'Traces' | 'Policies' | 'Alerts'
@@ -121,6 +122,8 @@ function Overview({ data, activeRuns, riskAverage, onSelectTrace, onRun, isRunni
       <Metric icon="alert" label="Open policy alerts" value={String(data.alerts.filter((alert) => alert.state === 'open').length)} trend="1 requires attention" tone="coral" />
       <Metric icon="agents" label="Monitored agents" value={String(data.agents.length)} trend="All reporting normally" tone="blue" />
     </section>
+
+    <RiskTrajectoryChart trace={focused} />
 
     <section className="action-banner">
       <div className="scenario-orb">↳</div><div><p className="eyebrow">INTERACTIVE DEMO</p><h2>Investigate a complete agent trajectory</h2><p>Replay a research delegation that is stopped at the sensitive-data boundary.</p></div>
