@@ -19,7 +19,7 @@ Requires Node.js 20+.
 
 ## Dashboard preview
 
-Open the self-contained [Sentinel dashboard preview](outputs/sentinel-dashboard-preview.html) for the working interactive control room without starting a local server. The preview includes the full research-delegation incident, policy block, risk score, alert, and trace timeline.
+Open the live [Sentinel governance dashboard](https://kowshikreddy099.github.io/sentinel-governance-platform/) for the working interactive control room. It includes the full research-delegation incident, policy block, risk score, alert, and trace timeline. A self-contained offline copy is also available at [outputs/sentinel-dashboard-preview.html](outputs/sentinel-dashboard-preview.html).
 
 ```powershell
 npm install
